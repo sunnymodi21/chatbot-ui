@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { useQuery } from 'react-query';
+import { SetStateAction, useEffect, useRef, useState} from 'react';
+import {useQuery} from 'react-query';
 
-import { GetServerSideProps } from 'next';
-import { useTranslation } from 'next-i18next';
-import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
+import {GetServerSideProps} from 'next';
+import {useTranslation} from 'next-i18next';
+import {serverSideTranslations} from 'next-i18next/serverSideTranslations';
 import Head from 'next/head';
 
-import { useCreateReducer } from '@/hooks/useCreateReducer';
+import {useCreateReducer} from '@/hooks/useCreateReducer';
 
 import useErrorService from '@/services/errorService';
 import useApiService from '@/services/useApiService';
@@ -15,31 +15,31 @@ import {
   cleanConversationHistory,
   cleanSelectedConversation,
 } from '@/utils/app/clean';
-import { DEFAULT_SYSTEM_PROMPT, DEFAULT_TEMPERATURE } from '@/utils/app/const';
+import {DEFAULT_SYSTEM_PROMPT, DEFAULT_TEMPERATURE} from '@/utils/app/const';
 import {
   saveConversation,
   saveConversations,
   updateConversation,
 } from '@/utils/app/conversation';
-import { saveFolders } from '@/utils/app/folders';
-import { savePrompts } from '@/utils/app/prompts';
-import { getSettings } from '@/utils/app/settings';
+import {saveFolders} from '@/utils/app/folders';
+import {savePrompts} from '@/utils/app/prompts';
+import {getSettings} from '@/utils/app/settings';
 
-import { Conversation } from '@/types/chat';
-import { KeyValuePair } from '@/types/data';
-import { FolderInterface, FolderType } from '@/types/folder';
-import { OpenAIModelID, OpenAIModels, fallbackModelID } from '@/types/openai';
-import { Prompt } from '@/types/prompt';
+import {Conversation} from '@/types/chat';
+import {KeyValuePair} from '@/types/data';
+import {FolderInterface, FolderType} from '@/types/folder';
+import {OpenAIModelID, OpenAIModels, fallbackModelID} from '@/types/openai';
+import {Prompt} from '@/types/prompt';
 
-import { Chat } from '@/components/Chat/Chat';
-import { Chatbar } from '@/components/Chatbar/Chatbar';
-import { Navbar } from '@/components/Mobile/Navbar';
+import {Chat} from '@/components/Chat/Chat';
+import {Chatbar} from '@/components/Chatbar/Chatbar';
+import {Navbar} from '@/components/Mobile/Navbar';
 import Promptbar from '@/components/Promptbar';
 
 import HomeContext from './home.context';
-import { HomeInitialState, initialState } from './home.state';
+import {HomeInitialState, initialState} from './home.state';
 
-import { v4 as uuidv4 } from 'uuid';
+import {v4 as uuidv4} from 'uuid';
 
 interface Props {
   serverSideApiKeyIsSet: boolean;
@@ -48,13 +48,13 @@ interface Props {
 }
 
 const Home = ({
-  serverSideApiKeyIsSet,
-  serverSidePluginKeysSet,
-  defaultModelId,
-}: Props) => {
-  const { t } = useTranslation('chat');
-  const { getModels } = useApiService();
-  const { getModelsError } = useErrorService();
+                serverSideApiKeyIsSet,
+                serverSidePluginKeysSet,
+                defaultModelId,
+              }: Props) => {
+  const {t} = useTranslation('chat');
+  const {getModels} = useApiService();
+  const {getModelsError} = useErrorService();
   const [initialRender, setInitialRender] = useState<boolean>(true);
 
   const contextValue = useCreateReducer<HomeInitialState>({
@@ -75,7 +75,46 @@ const Home = ({
   } = contextValue;
 
   const stopConversationRef = useRef<boolean>(false);
+  const [password, setPassword] = useState('');
+  const [accessGranted, setAccessGranted] = useState(false);
 
+  useEffect(() => {
+    // Function to check if the 'authenticated' cookie is set to 'true'
+    const checkAuthentication = () => {
+      const cookies = document.cookie.split(';');
+      const isAuthenticated = cookies.some(cookie => {
+        const [name, value] = cookie.split('=').map(c => c.trim());
+
+        return name === 'authenticated' && value === 'true';
+      });
+      setAccessGranted(isAuthenticated);
+    };
+    checkAuthentication();
+  }, []);
+
+  const handlePasswordChange = (event: { target: { value: SetStateAction<string>; }; }) => {
+    setPassword(event.target.value);
+  };
+
+  const handleSubmit = async (event: { preventDefault: () => void; }) => {
+    event.preventDefault(); // Prevent the default form submit action
+
+    const response = await fetch('/api/authenticate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password }),
+    });
+
+    const data = await response.json();
+
+    if (data.authenticated) {
+      setAccessGranted(true);
+    } else {
+      alert('Incorrect password');
+    }
+  };
   const { data, error, refetch } = useQuery(
     ['GetModels', apiKey, serverSideApiKeyIsSet],
     ({ signal }) => {
@@ -372,21 +411,47 @@ const Home = ({
         <main
           className={`flex h-screen w-screen flex-col text-sm text-white dark:text-white ${lightMode}`}
         >
-          <div className="fixed top-0 w-full sm:hidden">
-            <Navbar
-              selectedConversation={selectedConversation}
-              onNewConversation={handleNewConversation}
-            />
-          </div>
+          <div>
+            {!accessGranted ? (
+                <div className="flex justify-center items-center h-screen bg-gray-100">
+                  <div className="p-6 max-w-sm mx-auto bg-white rounded-xl shadow-md flex items-center space-x-4">
+                    <form onSubmit={handleSubmit} className="flex flex-col">
+                      <input
+                          type="password"
+                          value={password}
+                          onChange={handlePasswordChange}
+                          placeholder="Enter password"
+                          className="mb-4 px-4 py-2 border border-gray-300 rounded-md focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition duration-300 ease-in-out"
+                          style={{ backgroundColor: 'white', color: 'black' }}
+                      />
+                      <button
+                          type="submit"
+                          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-700"
+                      >
+                        Submit
+                      </button>
+                    </form>
+                  </div>
+                </div>
+            ) : (
+                <div>
+                  <div className="fixed top-0 w-full sm:hidden">
+                    <Navbar
+                        selectedConversation={selectedConversation}
+                        onNewConversation={handleNewConversation}
+                    />
+                  </div>
+                  <div className="flex h-full w-full pt-[48px] sm:pt-0">
+                    <Chatbar />
 
-          <div className="flex h-full w-full pt-[48px] sm:pt-0">
-            <Chatbar />
+                    <div className="flex flex-1">
+                      <Chat stopConversationRef={stopConversationRef} />
+                    </div>
 
-            <div className="flex flex-1">
-              <Chat stopConversationRef={stopConversationRef} />
-            </div>
-
-            <Promptbar />
+                    <Promptbar />
+                  </div>
+                </div>
+            )}
           </div>
         </main>
       )}
